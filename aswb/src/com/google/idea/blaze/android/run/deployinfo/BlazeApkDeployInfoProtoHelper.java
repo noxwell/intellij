@@ -33,6 +33,7 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Utilities for reading and constructing {@link AndroidDeployInfo} and {@link
@@ -97,6 +98,34 @@ public class BlazeApkDeployInfoProtoHelper {
             .collect(ImmutableList.toImmutableList());
 
     return new BlazeAndroidDeployInfo(mergedManifest, testTargetMergedManifest, apksToDeploy);
+  }
+
+  public BlazeAndroidDeployInfo extractInstrumentationTestDeployInfoAndInvalidateManifests(
+      Project project,
+      File executionRoot,
+      AndroidDeployInfo testDeployInfoProto,
+      AndroidDeployInfo targetDeployInfoProto)
+      throws GetDeployInfoException {
+    File testMergedManifestFile =
+        new File(executionRoot, testDeployInfoProto.getMergedManifest().getExecRootPath());
+    ParsedManifest testMergedManifest = getParsedManifestSafe(project, testMergedManifestFile);
+    ParsedManifestService.getInstance(project).invalidateCachedManifest(testMergedManifestFile);
+
+    File testTargetMergedManifestFile =
+        new File(executionRoot, targetDeployInfoProto.getMergedManifest().getExecRootPath());
+    ParsedManifest testTargetMergedManifest =
+        getParsedManifestSafe(project, testTargetMergedManifestFile);
+    ParsedManifestService.getInstance(project)
+        .invalidateCachedManifest(testTargetMergedManifestFile);
+
+    ImmutableList<File> apksToDeploy =
+        Stream.concat(
+                testDeployInfoProto.getApksToDeployList().stream(),
+                targetDeployInfoProto.getApksToDeployList().stream())
+            .map(artifact -> new File(executionRoot, artifact.getExecRootPath()))
+            .collect(ImmutableList.toImmutableList());
+
+    return new BlazeAndroidDeployInfo(testMergedManifest, testTargetMergedManifest, apksToDeploy);
   }
 
   /** Transforms thrown {@link IOException} to {@link GetDeployInfoException} */
